@@ -91,7 +91,7 @@ try {
 // Helper function to get rolls for a specific room
 function getRollsForRoomDbQuery(roomIdToQuery) {
   return new Promise((resolve, reject) => {
-    const rollsSql = `SELECT id, userName, diceType, result, timestamp, comment, actionName, weaponRank, masteryRank, rollFormula FROM rolls WHERE roomId = ? ORDER BY timestamp DESC`;
+    const rollsSql = `SELECT id, userName, diceType, result, rawDiceResult, timestamp, comment, actionName, weaponRank, masteryRank, rollFormula, rollDetails FROM rolls WHERE roomId = ? ORDER BY timestamp DESC`;
     try {
       const stmt = db.prepare(rollsSql);
       const rollRows = stmt.all(roomIdToQuery);
@@ -102,7 +102,9 @@ function getRollsForRoomDbQuery(roomIdToQuery) {
         actionName: roll.actionName || undefined,
         weaponRank: roll.weaponRank || undefined,
         masteryRank: roll.masteryRank || undefined,
-        rollFormula: roll.rollFormula || undefined
+        rollFormula: roll.rollFormula || undefined,
+        rawDiceResult: roll.rawDiceResult || undefined,
+        rollDetails: roll.rollDetails ? JSON.parse(roll.rollDetails) : undefined
       }));
       resolve(rolls);
     } catch (err) {
@@ -169,31 +171,34 @@ function getRoomById(roomId) {
 }
 
 // --- Roll Functions ---
-function addRoll(id, roomId, userName, diceType, result, timestamp, comment, actionName = null, weaponRank = null, masteryRank = null, rollFormula = null) {
+function addRoll(id, roomId, userName, diceType, result, timestamp, comment, actionName = null, weaponRank = null, masteryRank = null, rollFormula = null, rollDetails = null, rawDiceResult = null) {
   return new Promise((resolve, reject) => {
-    const sql = `INSERT INTO rolls (id, roomId, userName, diceType, result, timestamp, comment, actionName, weaponRank, masteryRank, rollFormula) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const sql = `INSERT INTO rolls (id, roomId, userName, diceType, result, rawDiceResult, timestamp, comment, actionName, weaponRank, masteryRank, rollFormula, rollDetails) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
     const isoTimestamp = timestamp instanceof Date ? timestamp.toISOString() : new Date(timestamp).toISOString();
     const commentToStore = comment && comment.trim() !== '' ? comment.trim() : null;
     const actionNameToStore = actionName && actionName.trim() !== '' ? actionName.trim() : null;
     const weaponRankToStore = weaponRank && weaponRank.trim() !== '' ? weaponRank.trim() : null;
     const masteryRankToStore = masteryRank && masteryRank.trim() !== '' ? masteryRank.trim() : null;
     const rollFormulaToStore = rollFormula && rollFormula.trim() !== '' ? rollFormula.trim() : null;
+    const rollDetailsToStore = rollDetails ? JSON.stringify(rollDetails) : null;
 
     try {
       const stmt = db.prepare(sql);
-      stmt.run(id, roomId, userName, diceType, result, isoTimestamp, commentToStore, actionNameToStore, weaponRankToStore, masteryRankToStore, rollFormulaToStore);
+      stmt.run(id, roomId, userName, diceType, result, rawDiceResult, isoTimestamp, commentToStore, actionNameToStore, weaponRankToStore, masteryRankToStore, rollFormulaToStore, rollDetailsToStore);
       resolve({
         id,
         roomId,
         userName,
         diceType,
         result,
+        rawDiceResult: rawDiceResult || undefined,
         timestamp: new Date(isoTimestamp),
         comment: commentToStore || undefined,
         actionName: actionNameToStore || undefined,
         weaponRank: weaponRankToStore || undefined,
         masteryRank: masteryRankToStore || undefined,
-        rollFormula: rollFormulaToStore || undefined
+        rollFormula: rollFormulaToStore || undefined,
+        rollDetails: rollDetails || undefined
       });
     } catch (err) {
       console.error(`Error adding roll with better-sqlite3:`, err.message);

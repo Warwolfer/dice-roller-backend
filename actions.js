@@ -129,7 +129,7 @@ const ACTIONS = [
       ],
       bonuses: ['WR'],
       modifiers: [
-        { type: 'explosion', threshold: 16, chance: 0.25, extraDice: { count: 1, sides: 20 } }
+        { type: 'explosion', threshold: 16, chance: 0.25,   extraDice: { count: 1, sides: 20 } }
       ]
     }
   },

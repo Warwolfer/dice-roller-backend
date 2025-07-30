@@ -68,6 +68,7 @@ class FormulaCalculator {
     this.rollHistory = [];
     
     let totalResult = 0;
+    let rawDiceTotal = 0; // Track pure dice total before any bonuses
     let diceGroups = []; // Store dice groups with their individual rolls
     let bonusBreakdown = [];
     let modifierBreakdown = [];
@@ -105,6 +106,7 @@ class FormulaCalculator {
         
         diceGroups.push(diceGroup);
         totalResult += diceSum;
+        rawDiceTotal += diceSum; // Track raw dice total
       }
     }
 
@@ -160,6 +162,10 @@ class FormulaCalculator {
         
         if (modifierResult.explosionRolls) {
           explosionRolls = explosionRolls.concat(modifierResult.explosionRolls);
+          // Add explosion rolls to raw dice total since they're pure dice
+          if (modifier.type === 'explosion') {
+            rawDiceTotal += modifierResult.explosionRolls.reduce((sum, roll) => sum + roll, 0);
+          }
         }
       }
       
@@ -183,11 +189,13 @@ class FormulaCalculator {
 
     return {
       result: Math.max(1, Math.floor(finalResult)), // Ensure positive integer result
+      rawDiceResult: rawDiceTotal, // Raw dice total before bonuses
       details: {
         diceGroups,
         bonusBreakdown,
         modifierBreakdown,
         explosionRolls,
+        rawDiceTotal,
         baseTotal: totalResult,
         finalResult,
         breakdown
@@ -261,18 +269,39 @@ class FormulaCalculator {
           }
         }
         if (explosions > 0) {
-          const extraRolls = [];
-          for (let i = 0; i < explosions; i++) {
-            const extraRoll = this.rollDie(modifier.extraDice.sides);
-            extraRolls.push(extraRoll);
+          const allExplosionRolls = [];
+          let explosionTotal = 0;
+          let currentExplosions = explosions;
+          let totalTriggers = explosions;
+          
+          // Handle cascading explosions with safety limit
+          let maxIterations = 10; // Prevent infinite loops
+          while (currentExplosions > 0 && maxIterations > 0) {
+            const newRolls = [];
+            for (let i = 0; i < currentExplosions; i++) {
+              const extraRoll = this.rollDie(modifier.extraDice.sides);
+              newRolls.push(extraRoll);
+              allExplosionRolls.push(extraRoll);
+              explosionTotal += extraRoll;
+            }
+            
+            // Check if any of the new rolls trigger more explosions
+            currentExplosions = 0;
+            for (const newRoll of newRolls) {
+              if (newRoll >= modifier.threshold) {
+                currentExplosions++;
+                totalTriggers++;
+              }
+            }
+            maxIterations--;
           }
-          const explosionTotal = extraRolls.reduce((sum, roll) => sum + roll, 0);
+          
           return {
             result: currentResult + explosionTotal,
-            details: `${explosions} explosions`,
+            details: `${totalTriggers} explosions`,
             multiplier: 1,
             value: explosionTotal,
-            explosionRolls: extraRolls
+            explosionRolls: allExplosionRolls
           };
         }
         return {
@@ -364,13 +393,13 @@ class FormulaCalculator {
 
     // Add explosions if any
     if (explosionRolls.length > 0) {
-      parts.push(`+EXP[${explosionRolls.join(' + ')}]`);
+      parts.push(`EXP[${explosionRolls.join(' + ')}]`);
     }
 
     // Add bonuses
     for (const bonus of bonusBreakdown) {
       if (bonus.value > 0) {
-        parts.push(`+${bonus.value}(${bonus.display})`);
+        parts.push(`${bonus.value}(${bonus.display})`);
       }
     }
 
@@ -383,7 +412,12 @@ class FormulaCalculator {
       if (modifier.multiplier && modifier.multiplier !== 1) {
         result = `(${result}) × ${modifier.multiplier}(${modifier.description})`;
       } else if (modifier.value !== 0) {
-        result += ` + ${modifier.value}(${modifier.description})`;
+        // For explosions, don't show the total value since it's already in EXP[]
+        if (modifier.type === 'explosion') {
+          result += ` + (${modifier.description})`;
+        } else {
+          result += ` + ${modifier.value}(${modifier.description})`;
+        }
       }
     }
 

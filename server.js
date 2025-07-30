@@ -83,6 +83,7 @@ app.post('/api/rooms/:roomId/rolls', async (req, res) => {
   const isActionRoll = actionName && weaponRank && masteryRank;
   
   let result;
+  let rawDiceResult = null;
   let actualDiceType = null;
   let rollDetails = null;
 
@@ -102,6 +103,7 @@ app.post('/api/rooms/:roomId/rolls', async (req, res) => {
     const calculator = new FormulaCalculator();
     const rollResult = calculator.calculateActionRoll(action, weaponRank, masteryRank, 0);
     result = rollResult.result;
+    rawDiceResult = rollResult.rawDiceResult;
     rollDetails = rollResult.details;
     actualDiceType = 100; // Store as d100 for action rolls (for compatibility)
   } else {
@@ -113,6 +115,7 @@ app.post('/api/rooms/:roomId/rolls', async (req, res) => {
     
     actualDiceType = Number(diceType);
     result = Math.floor(Math.random() * actualDiceType) + 1;
+    rawDiceResult = result; // For regular dice rolls, raw result equals final result
   }
 
   const newRollId = crypto.randomUUID();
@@ -135,7 +138,9 @@ app.post('/api/rooms/:roomId/rolls', async (req, res) => {
       actionName,
       weaponRank,
       masteryRank,
-      rollFormula
+      rollFormula,
+      rollDetails,
+      rawDiceResult
     );
     
     // Include roll details in response for action rolls
