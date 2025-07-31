@@ -87,13 +87,13 @@ app.get('/api/rooms', (req, res) => {
 });
 
 app.post('/api/rooms', (req, res) => {
-  const { name } = req.body;
+  const { name, creatorName, creatorTerraRpId, roomCode } = req.body;
   if (!name || typeof name !== 'string' || name.trim() === '') {
     return res.status(400).json({ error: 'Room name is required and must be a non-empty string.' });
   }
   const id = crypto.randomUUID();
   try {
-    const newRoom = db.addRoom(id, name.trim());
+    const newRoom = db.addRoom(id, name.trim(), creatorName, creatorTerraRpId, roomCode);
     res.status(201).json(newRoom);
   } catch (error) {
     console.error('Failed to create room:', error);
@@ -119,7 +119,7 @@ app.get('/api/rooms/:roomId', (req, res) => {
 // Rolls
 app.post('/api/rooms/:roomId/rolls', async (req, res) => {
   const { roomId } = req.params;
-  const { userName, diceType, comment, actionName, weaponRank, masteryRank, rollFormula, avatarUrl } = req.body;
+  const { userName, diceType, comment, actionName, weaponRank, masteryRank, rollFormula, avatarUrl, bonus } = req.body;
 
   if (!userName || typeof userName !== 'string' || userName.trim() === '') {
     return res.status(400).json({ error: 'User name is required.' });
@@ -146,7 +146,8 @@ app.post('/api/rooms/:roomId/rolls', async (req, res) => {
     }
 
     // Use shared formula calculator for action rolls
-    const rollResult = formulaCalculator.calculateActionRoll(action, weaponRank, masteryRank, 0);
+    const actionBonus = parseInt(bonus) || 0;
+    const rollResult = formulaCalculator.calculateActionRoll(action, weaponRank, masteryRank, actionBonus);
     result = rollResult.result;
     rawDiceResult = rollResult.rawDiceResult;
     rollDetails = rollResult.details;

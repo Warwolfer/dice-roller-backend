@@ -30,7 +30,7 @@ const ACTIONS = [
     name: 'Recover',
     type: 'Roll',
     subtype: 'Heal',
-    description: 'Recover your HP by 1d20 with advantage and gain the same amount to any roll next cycle.\nAdded as of 6/21/25',
+    description: 'Recover your HP by 1d20 with advantage and gain the same amount to any roll next cycle.',
     rollFormula: '1d20 with advantage',
     calculableFormula: {
       dice: [{ count: 2, sides: 20, keepHighest: 1 }], // advantage = roll twice, keep highest
@@ -45,7 +45,7 @@ const ACTIONS = [
     name: 'Protect',
     type: 'Roll',
     subtype: 'Damage',
-    description: 'You may now protect yourself, but it only applies to the damage dealt by the enemy you attack. If AoE or Torment AoE is used, protect works against the most damaging attack among your targets.',
+    description: 'Apply [Protected] to one target. If you protect yourself, it only applies to the damage dealt by the enemy you attack. If AoE or Torment AoE is used, protect works against the most damaging attack among your targets.',
     rollFormula: '1d100 + MR + WR + other bonuses',
     calculableFormula: {
       dice: [{ count: 1, sides: 100 }],
@@ -102,7 +102,7 @@ const ACTIONS = [
     name: 'Stable Attack',
     type: 'Roll',
     subtype: 'Damage',
-    description: 'Note: Upped the base slightly.',
+    description: 'd20-based attack with explosion mechanics. Roll another d20 on an explosion.',
     rollFormula: '7d20 + (1d20 per MR) + WR + other bonuses, EXP on 17-20 (20% explosion)',
     calculableFormula: {
       dice: [
@@ -120,7 +120,7 @@ const ACTIONS = [
     name: 'Special Burst Attack',
     type: 'Roll',
     subtype: 'Damage',
-    description: '(B) Upgrade. Base 12d20 → 13d20\n(S) Upgrade. Base 13d20 → 14d20\nNote: As of 8:35 AM MST, this has changed. Dropped the passive and instead increased explosion chance.',
+    description: 'd20-based attack with higher explosion chances. Roll another d20 on an explosion.',
     rollFormula: '12d20 + (1d20 per MR) + WR + other bonuses, EXP on 16-20 (25% explosion)',
     calculableFormula: {
       dice: [
@@ -230,7 +230,7 @@ const ACTIONS = [
     name: 'Power Heal',
     type: 'Roll',
     subtype: 'Heal',
-    description: 'Explosion: 15-20 grants you another d20 (30% explosion)\nCleanse 2 curable conditions (D) 3 (B) 4 (S) after healing. +5 HP per unused cleanse charge.\nNote: Reduced base roll, but giving it a 30% chance for explosion.',
+    description: 'Explosion: 15-20 grants you another d20 (30% explosion)\nCleanse 2 curable conditions (D) 3 (B) 4 (S) after healing. +5 HP per unused cleanse charge.',
     rollFormula: '4d20 + MR + WR + other bonuses then divide by 3 if AoE',
     calculableFormula: {
       dice: [{ count: 4, sides: 20 }],

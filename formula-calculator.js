@@ -72,6 +72,7 @@ class FormulaCalculator {
     let diceGroups = []; // Store dice groups with their individual rolls
     let bonusBreakdown = [];
     let modifierBreakdown = [];
+    let hasCriticalHit = false; // Track if any d100 rolled 100
 
     // Roll all dice and store detailed breakdown
     for (const diceConfig of calculableFormula.dice) {
@@ -94,6 +95,16 @@ class FormulaCalculator {
       if (count > 0) {
         const diceRolls = this.rollDice({ ...diceConfig, count });
         const diceSum = diceRolls.reduce((sum, roll) => sum + roll, 0);
+        
+        // Check for d100 critical hits (rolling 100 on a d100)
+        if (diceConfig.sides === 100) {
+          for (const roll of diceRolls) {
+            if (roll === 100) {
+              hasCriticalHit = true;
+              break;
+            }
+          }
+        }
         
         // Store dice group details
         const diceGroup = {
@@ -169,7 +180,24 @@ class FormulaCalculator {
         }
       }
       
+      // Check for critical hits from modifiers (like bonus conversion)
+      if (modifierResult.hasCriticalHit) {
+        hasCriticalHit = true;
+      }
+      
       finalResult = modifierResult.result;
+    }
+
+    // Apply critical hit multiplier if any d100 rolled 100
+    if (hasCriticalHit) {
+      finalResult = finalResult * 2;
+      modifierBreakdown.push({
+        type: 'critical_hit',
+        description: 'D100 Critical Hit (×2)',
+        value: 0,
+        multiplier: 2,
+        explosionRolls: []
+      });
     }
 
     // Generate human-readable breakdown
@@ -325,17 +353,24 @@ class FormulaCalculator {
         if (extraDice > 0) {
           let extraTotal = 0;
           const conversionRolls = [];
+          let conversionCriticalHit = false;
           for (let i = 0; i < extraDice; i++) {
             const roll = this.rollDie(modifier.convertToDice.sides);
             conversionRolls.push(roll);
             extraTotal += roll;
+            
+            // Check for d100 critical hits in conversion rolls
+            if (modifier.convertToDice.sides === 100 && roll === 100) {
+              conversionCriticalHit = true;
+            }
           }
           return {
             result: currentResult - otherBonuses + extraTotal + leftoverBonus,
             details: `Converted ${extraDice} dice`,
             multiplier: 1,
             value: extraTotal + leftoverBonus - otherBonuses,
-            explosionRolls: conversionRolls
+            explosionRolls: conversionRolls,
+            hasCriticalHit: conversionCriticalHit
           };
         }
         return {

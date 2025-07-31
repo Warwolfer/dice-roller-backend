@@ -133,22 +133,22 @@ function getParticipantsForRoomDbQuery(roomIdToQuery) {
 }
 
 // --- Room Functions ---
-function addRoom(id, name) {
-  const sql = `INSERT INTO rooms (id, name) VALUES (?, ?)`;
+function addRoom(id, name, creatorName, creatorTerraRpId, roomCode) {
+  const sql = `INSERT INTO rooms (id, name, creator_name, creator_terrarp_id, room_code) VALUES (?, ?, ?, ?, ?)`;
   const stmt = db.prepare(sql);
-  stmt.run(id, name);
+  stmt.run(id, name, creatorName, creatorTerraRpId, roomCode);
   return { id, name, rolls: [], participants: [] };
 }
 
 function getRooms() {
-  const sql = `SELECT id, name FROM rooms ORDER BY name`;
+  const sql = `SELECT * FROM rooms ORDER BY created_at DESC`;
   const stmt = db.prepare(sql);
   const rows = stmt.all();
   return rows.map(r => ({ ...r, rolls: [], participants: [] }));
 }
 
 function getRoomById(roomId) {
-  const roomSql = `SELECT id, name FROM rooms WHERE id = ?`;
+  const roomSql = `SELECT * FROM rooms WHERE id = ?`;
   const roomStmt = db.prepare(roomSql);
   const roomRow = roomStmt.get(roomId);
 
@@ -159,6 +159,12 @@ function getRoomById(roomId) {
   const rolls = getRollsForRoomDbQuery(roomId);
   const participants = getParticipantsForRoomDbQuery(roomId);
   return { ...roomRow, rolls, participants };
+}
+
+function updateRoomUpdatedAt(roomId) {
+  const sql = `UPDATE rooms SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`;
+  const stmt = db.prepare(sql);
+  stmt.run(roomId);
 }
 
 // --- Roll Functions ---
@@ -175,6 +181,7 @@ function addRoll(id, roomId, userName, diceType, result, timestamp, comment, act
 
   const stmt = db.prepare(sql);
   stmt.run(id, roomId, userName, diceType, result, rawDiceResult, isoTimestamp, commentToStore, actionNameToStore, weaponRankToStore, masteryRankToStore, rollFormulaToStore, rollDetailsToStore, avatarUrlToStore);
+  updateRoomUpdatedAt(roomId);
   
   return {
     id,
@@ -355,4 +362,5 @@ module.exports = {
   getParticipantByRoomAndName,
   getParticipantByRoomAndTerraRPId,
   getParticipantsForRoomDbQuery,
+  updateRoomUpdatedAt,
 };
