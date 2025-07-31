@@ -3,7 +3,7 @@ const { RANK_BONUSES, getRankLevel } = require('./actions');
 
 class FormulaCalculator {
   constructor() {
-    this.rollHistory = []; // Store individual die rolls for debugging
+    // Removed rollHistory - use database for audit trail instead
   }
 
   /**
@@ -151,7 +151,7 @@ class FormulaCalculator {
       const modifierResult = this.applyModifier(modifier, finalResult, diceGroups.flatMap(g => g.rolls), weaponRank, masteryRank, otherBonuses);
       
       // Store modifier details
-      if (modifierResult.value !== 0 || modifierResult.multiplier !== 1) {
+      if (modifierResult.value !== 0 || modifierResult.multiplier !== 1 || modifier.type === 'explosion') {
         modifierBreakdown.push({
           type: modifier.type,
           description: modifierResult.details,
@@ -175,17 +175,7 @@ class FormulaCalculator {
     // Generate human-readable breakdown
     const breakdown = this.generateBreakdownString(diceGroups, bonusBreakdown, modifierBreakdown, explosionRolls, finalResult);
 
-    // Store roll history for debugging
-    this.rollHistory.push({
-      action: action.name,
-      diceGroups,
-      bonusBreakdown,
-      modifierBreakdown,
-      explosionRolls,
-      baseTotal: totalResult,
-      finalResult,
-      breakdown
-    });
+    // rollHistory removed - use database for persistent audit trail
 
     return {
       result: Math.max(1, Math.floor(finalResult)), // Ensure positive integer result
@@ -391,9 +381,12 @@ class FormulaCalculator {
       }
     }
 
-    // Add explosions if any
+    // Add explosions if any with explosion count
     if (explosionRolls.length > 0) {
-      parts.push(`EXP[${explosionRolls.join(' + ')}]`);
+      // Find explosion modifier to get count
+      const explosionModifier = modifierBreakdown.find(m => m.type === 'explosion');
+      const explosionCount = explosionModifier?.description || `${explosionRolls.length} explosions`;
+      parts.push(`EXP[${explosionRolls.join(' + ')}](${explosionCount})`);
     }
 
     // Add bonuses
@@ -406,18 +399,14 @@ class FormulaCalculator {
     // Build base calculation
     let baseCalc = parts.join(' + ');
 
-    // Add modifiers
+    // Add modifiers (excluding explosions which are already handled above)
     let result = baseCalc;
     for (const modifier of modifierBreakdown) {
       if (modifier.multiplier && modifier.multiplier !== 1) {
         result = `(${result}) × ${modifier.multiplier}(${modifier.description})`;
-      } else if (modifier.value !== 0) {
-        // For explosions, don't show the total value since it's already in EXP[]
-        if (modifier.type === 'explosion') {
-          result += ` + (${modifier.description})`;
-        } else {
-          result += ` + ${modifier.value}(${modifier.description})`;
-        }
+      } else if (modifier.value !== 0 && modifier.type !== 'explosion') {
+        // Skip explosions since they're already included with EXP[...]
+        result += ` + ${modifier.value}(${modifier.description})`;
       }
     }
 
@@ -426,9 +415,10 @@ class FormulaCalculator {
 
   /**
    * Get the last roll history for debugging
+   * Note: rollHistory removed - use database queries for roll details
    */
   getLastRollHistory() {
-    return this.rollHistory[this.rollHistory.length - 1] || null;
+    return null;
   }
 }
 
