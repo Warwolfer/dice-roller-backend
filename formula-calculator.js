@@ -73,6 +73,8 @@ class FormulaCalculator {
     let bonusBreakdown = [];
     let modifierBreakdown = [];
     let hasCriticalHit = false; // Track if any d100 rolled 100
+    let allNaturalDiceRolls = []; // Track all natural dice rolls for threshold checks
+    let isSpecialCriticalAttack = action.name === 'Special Critical Attack';
 
     // Roll all dice and store detailed breakdown
     for (const diceConfig of calculableFormula.dice) {
@@ -96,8 +98,11 @@ class FormulaCalculator {
         const diceRolls = this.rollDice({ ...diceConfig, count });
         const diceSum = diceRolls.reduce((sum, roll) => sum + roll, 0);
         
-        // Check for d100 critical hits (rolling 100 on a d100)
-        if (diceConfig.sides === 100) {
+        // Track all natural dice rolls for threshold checks
+        allNaturalDiceRolls = allNaturalDiceRolls.concat(diceRolls);
+        
+        // Check for d100 critical hits (rolling 100 on a d100) - but not for Special Critical Attack
+        if (diceConfig.sides === 100 && !isSpecialCriticalAttack) {
           for (const roll of diceRolls) {
             if (roll === 100) {
               hasCriticalHit = true;
@@ -157,9 +162,10 @@ class FormulaCalculator {
     // Apply modifiers with detailed breakdown
     let finalResult = totalResult;
     let explosionRolls = [];
+    let criticalAlreadyApplied = false; // Track if a critical multiplier was already applied
 
     for (const modifier of calculableFormula.modifiers || []) {
-      const modifierResult = this.applyModifier(modifier, finalResult, diceGroups.flatMap(g => g.rolls), weaponRank, masteryRank, otherBonuses);
+      const modifierResult = this.applyModifier(modifier, finalResult, diceGroups.flatMap(g => g.rolls), weaponRank, masteryRank, otherBonuses, allNaturalDiceRolls, isSpecialCriticalAttack, criticalAlreadyApplied);
       
       // Store modifier details
       if (modifierResult.value !== 0 || modifierResult.multiplier !== 1 || modifier.type === 'explosion') {
@@ -185,11 +191,16 @@ class FormulaCalculator {
         hasCriticalHit = true;
       }
       
+      // Track if a critical multiplier was applied to prevent stacking
+      if (modifierResult.criticalTriggered) {
+        criticalAlreadyApplied = true;
+      }
+      
       finalResult = modifierResult.result;
     }
 
-    // Apply critical hit multiplier if any d100 rolled 100
-    if (hasCriticalHit) {
+    // Apply critical hit multiplier if any d100 rolled 100 (but not for Special Critical Attack)
+    if (hasCriticalHit && !isSpecialCriticalAttack) {
       finalResult = finalResult * 2;
       modifierBreakdown.push({
         type: 'critical_hit',
@@ -224,7 +235,7 @@ class FormulaCalculator {
   /**
    * Apply a modifier to the current result
    */
-  applyModifier(modifier, currentResult, allRolls, weaponRank, masteryRank, otherBonuses) {
+  applyModifier(modifier, currentResult, allRolls, weaponRank, masteryRank, otherBonuses, allNaturalDiceRolls = [], isSpecialCriticalAttack = false, criticalAlreadyApplied = false) {
     switch (modifier.type) {
       case 'multiplier':
         return {
@@ -235,15 +246,34 @@ class FormulaCalculator {
         };
 
       case 'threshold_multiplier':
-        if (currentResult >= modifier.threshold) {
+        // Skip if a critical multiplier was already applied (prevent stacking)
+        if (criticalAlreadyApplied) {
+          return {
+            result: currentResult,
+            details: `Critical already applied`,
+            multiplier: 1,
+            value: 0
+          };
+        }
+        
+        // For Special Critical Attack, check natural dice rolls instead of final result
+        let checkValue = currentResult;
+        if (isSpecialCriticalAttack) {
+          // Get the highest natural d100 roll for threshold check
+          const d100Rolls = allNaturalDiceRolls.filter(roll => roll <= 100); // Only d100 rolls
+          checkValue = d100Rolls.length > 0 ? Math.max(...d100Rolls) : 0;
+        }
+        
+        if (checkValue >= modifier.threshold) {
           const multiplier = modifier.multiplierByRank 
             ? modifier.multiplierByRank[masteryRank] || modifier.multiplierByRank.E
             : modifier.multiplier;
           return {
             result: currentResult * multiplier,
-            details: `${masteryRank} Critical`,
+            details: isSpecialCriticalAttack ? `Natural ${checkValue} Critical` : `${masteryRank} Critical`,
             multiplier: multiplier,
-            value: 0
+            value: 0,
+            criticalTriggered: true // Flag to prevent stacking
           };
         }
         return {

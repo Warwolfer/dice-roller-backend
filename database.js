@@ -137,7 +137,9 @@ function addRoom(id, name, creatorName, creatorTerraRpId, roomCode) {
   const sql = `INSERT INTO rooms (id, name, creator_name, creator_terrarp_id, room_code) VALUES (?, ?, ?, ?, ?)`;
   const stmt = db.prepare(sql);
   stmt.run(id, name, creatorName, creatorTerraRpId, roomCode);
-  return { id, name, rolls: [], participants: [] };
+  
+  // Return the complete room data by fetching it back
+  return getRoomById(id);
 }
 
 function getRooms() {

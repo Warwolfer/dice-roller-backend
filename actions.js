@@ -4,16 +4,15 @@
 const RANK_BONUSES = {
   E: 0,
   D: 10,
-  C: 20,
-  B: 30,
-  A: 40,
-  S: 50
+  C: 15,
+  B: 25,
+  A: 30,
+  S: 40
 };
 
 const ACTIONS = [
-  // Basic Actions
   {
-    category: 'Basic',
+    category: 'Offense',
     name: 'Attack',
     type: 'Roll',
     subtype: 'Damage',
@@ -22,19 +21,6 @@ const ACTIONS = [
     calculableFormula: {
       dice: [{ count: 1, sides: 100 }],
       bonuses: ['MR', 'WR'],
-      modifiers: []
-    }
-  },
-  {
-    category: 'Basic',
-    name: 'Recover',
-    type: 'Roll',
-    subtype: 'Heal',
-    description: 'Recover your HP by 1d20 with advantage and gain the same amount to any roll next cycle.',
-    rollFormula: '1d20 with advantage',
-    calculableFormula: {
-      dice: [{ count: 2, sides: 20, keepHighest: 1 }], // advantage = roll twice, keep highest
-      bonuses: [],
       modifiers: []
     }
   },
@@ -117,7 +103,7 @@ const ACTIONS = [
   },
   {
     category: 'Offense',
-    name: 'Special Burst Attack',
+    name: 'Burst Attack',
     type: 'Roll',
     subtype: 'Damage',
     description: 'd20-based attack with higher explosion chances. Roll another d20 on an explosion.',
@@ -155,7 +141,7 @@ const ACTIONS = [
   },
   {
     category: 'Offense',
-    name: 'Special Critical Attack',
+    name: 'Critical Attack',
     type: 'Roll',
     subtype: 'Damage',
     description: 'Passive: Multiply your total damage by 1.2\nIf 85+ multiply your total damage by 1.5 D, 1.6 C, 1.7 B, 1.8 A, 2 S.\nIf 100. multiply your total damage by 3.',
@@ -191,7 +177,7 @@ const ACTIONS = [
   },
   {
     category: 'Offense',
-    name: 'Special Reckless Attack',
+    name: 'Reckless Attack',
     type: 'Roll',
     subtype: 'Damage',
     description: 'Free Action. Convert other bonuses into more dice that may trigger crits. +1d100 for each 40 you spend. Leftovers are added as mod.',
@@ -273,7 +259,7 @@ const ACTIONS = [
   }
 ];
 
-const ACTION_CATEGORIES = ['Basic', 'Defense', 'Offense', 'Support'];
+const ACTION_CATEGORIES = ['Offense', 'Defense', 'Support'];
 
 // Helper function to get rank level as number (0-5)
 function getRankLevel(rank) {

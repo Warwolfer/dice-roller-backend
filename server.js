@@ -1,7 +1,11 @@
 
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto'); // For generating IDs, similar to client-side
+const http = require('http');
+const WebSocket = require('ws');
 const db = require('./database');
 const { ACTIONS, ACTION_CATEGORIES, RANK_BONUSES } = require('./actions');
 const FormulaCalculator = require('./formula-calculator');
@@ -199,6 +203,13 @@ app.post('/api/rooms/:roomId/rolls', async (req, res) => {
       response.calculationDetails = rollDetails;
     }
     
+    // Broadcast new roll to all clients in the room
+    broadcastToRoom(roomId, {
+      type: 'new_roll',
+      roomId: roomId,
+      payload: response
+    });
+    
     res.status(201).json(response);
   } catch (error) {
     console.error(`Failed to add roll to room ${roomId}:`, error);
@@ -238,6 +249,14 @@ app.post('/api/rooms/:roomId/join', (req, res) => {
 
     // Create new participant
     const newParticipant = db.addParticipant(roomId, userName.trim(), terraRPData);
+    
+    // Broadcast new participant to all clients in the room
+    broadcastToRoom(roomId, {
+      type: 'participant_joined',
+      roomId: roomId,
+      payload: newParticipant
+    });
+    
     res.status(201).json(newParticipant);
   } catch (error) {
     console.error('Error joining room as participant:', error);
@@ -272,6 +291,11 @@ app.get('/api/terrarp-user/:userId', async (req, res) => {
   }
   
   try {
+    if (!process.env.TERRARP_API_KEY) {
+      console.error('TERRARP_API_KEY environment variable is not set');
+      return res.status(500).json({ error: 'TerraRP API key not configured' });
+    }
+
     console.log(`Making TerraRP API call for user ID: ${userId}`);
     
     const controller = new AbortController();
@@ -279,7 +303,7 @@ app.get('/api/terrarp-user/:userId', async (req, res) => {
     
     const response = await fetch(`https://terrarp.com/api/terrasphere-charactermanager/?id=${userId}`, {
       headers: {
-        'Xf-Api-Key': process.env.TERRARP_API_KEY || 'nY3YHH7VMoIIVj8WgvmFfBG2tLeWyzUj'
+        'Xf-Api-Key': process.env.TERRARP_API_KEY
       },
       signal: controller.signal
     });
@@ -313,7 +337,140 @@ app.get('/', (req, res) => {
   res.send('Dice Roller Backend is running!');
 });
 
+// Create HTTP server
+const server = http.createServer(app);
+
+// WebSocket connection management
+const roomConnections = new Map(); // roomId -> Set<websocket>
+const connectionRooms = new Map(); // websocket -> roomId
+
+// Create WebSocket server
+const wss = new WebSocket.Server({ server });
+
+wss.on('connection', (ws) => {
+  console.log('WebSocket client connected');
+  
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      handleWebSocketMessage(ws, data);
+    } catch (error) {
+      console.error('Invalid WebSocket message:', error.message);
+      ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
+    }
+  });
+  
+  ws.on('close', () => {
+    console.log('WebSocket client disconnected');
+    // Clean up room subscriptions
+    const roomId = connectionRooms.get(ws);
+    if (roomId) {
+      leaveRoom(ws, roomId);
+    }
+  });
+  
+  ws.on('error', (error) => {
+    console.error('WebSocket error:', error);
+  });
+});
+
+function handleWebSocketMessage(ws, data) {
+  const { type, roomId, payload } = data;
+  
+  switch (type) {
+    case 'join_room':
+      if (roomId) {
+        joinRoom(ws, roomId, payload);
+      } else {
+        ws.send(JSON.stringify({ type: 'error', message: 'Room ID required' }));
+      }
+      break;
+      
+    case 'leave_room':
+      if (roomId) {
+        leaveRoom(ws, roomId);
+      }
+      break;
+      
+    case 'ping':
+      // Respond to heartbeat ping with pong
+      ws.send(JSON.stringify({ type: 'pong' }));
+      break;
+      
+    default:
+      console.log('Unknown WebSocket message type:', type, data);
+      ws.send(JSON.stringify({ type: 'error', message: 'Unknown message type' }));
+  }
+}
+
+function joinRoom(ws, roomId, payload = {}) {
+  // Verify room exists
+  try {
+    const room = db.getRoomById(roomId);
+    if (!room) {
+      ws.send(JSON.stringify({ type: 'error', message: 'Room not found' }));
+      return;
+    }
+  } catch (error) {
+    ws.send(JSON.stringify({ type: 'error', message: 'Invalid room ID' }));
+    return;
+  }
+  
+  // Leave previous room if connected to one
+  const currentRoomId = connectionRooms.get(ws);
+  if (currentRoomId) {
+    leaveRoom(ws, currentRoomId);
+  }
+  
+  // Join new room
+  if (!roomConnections.has(roomId)) {
+    roomConnections.set(roomId, new Set());
+  }
+  
+  roomConnections.get(roomId).add(ws);
+  connectionRooms.set(ws, roomId);
+  
+  console.log(`Client joined room: ${roomId}`);
+  ws.send(JSON.stringify({ type: 'joined_room', roomId, payload }));
+  
+  // Notify other clients in the room (optional)
+  if (payload.userName) {
+    broadcastToRoom(roomId, {
+      type: 'user_joined',
+      roomId,
+      payload: { userName: payload.userName }
+    }, ws); // Exclude the sender
+  }
+}
+
+function leaveRoom(ws, roomId) {
+  const roomConnections_set = roomConnections.get(roomId);
+  if (roomConnections_set) {
+    roomConnections_set.delete(ws);
+    if (roomConnections_set.size === 0) {
+      roomConnections.delete(roomId);
+    }
+  }
+  
+  connectionRooms.delete(ws);
+  console.log(`Client left room: ${roomId}`);
+  
+  ws.send(JSON.stringify({ type: 'left_room', roomId }));
+}
+
+function broadcastToRoom(roomId, message, excludeWs = null) {
+  const connections = roomConnections.get(roomId);
+  if (!connections) return;
+  
+  const messageStr = JSON.stringify(message);
+  connections.forEach(clientWs => {
+    if (clientWs !== excludeWs && clientWs.readyState === WebSocket.OPEN) {
+      clientWs.send(messageStr);
+    }
+  });
+}
+
 // Start server
-app.listen(PORT, () => {
-  console.log(`Backend server listening on http://localhost:${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Backend server with WebSocket support listening on http://localhost:${PORT}`);
 });
